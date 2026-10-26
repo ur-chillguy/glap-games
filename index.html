@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12100e">
+<title>Glap! Kepala Tambang Sehari</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+/* Layout: satu layar ponsel. Panggung visual novel penuh: latar SVG, potret tokoh, HUD di atas, kotak dialog di bawah, lembar pilihan naik dari bawah. */
+/* reset dasar */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0}
+[hidden]{display:none!important}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root{
+  --coal:#12100e;
+  --coal-2:#1c1915;
+  --ash:#28231d;
+  --line:#463d33;
+  --fg:#f4ede4;
+  --muted:#b9ad9f;
+  --ember:#ff8a3d;
+  --lamp:#ffd36b;
+  --leaf:#62c483;
+  --danger:#f0645c;
+  --font-display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --font-body:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--coal);color:var(--fg);font-family:var(--font-body);overflow:hidden;-webkit-tap-highlight-color:transparent}
+#app{position:relative;height:100%;max-width:460px;margin:0 auto;overflow:hidden;background:var(--coal-2);user-select:none;-webkit-user-select:none}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--lamp);outline-offset:2px}
+
+.bg{position:absolute;inset:0;z-index:0;transition:filter .6s ease}
+.bg svg{width:100%;height:100%;display:block}
+.bg.is-bad{filter:grayscale(.7) brightness(.45) sepia(.4) hue-rotate(-25deg)}
+
+.portrait{position:absolute;left:50%;bottom:118px;width:min(70%,290px);transform:translateX(-50%);z-index:1;filter:drop-shadow(0 10px 24px rgba(0,0,0,.45));animation:rise .35s ease-out}
+.portrait svg{width:100%;height:auto;display:block}
+@keyframes rise{from{opacity:0;transform:translate(-50%,18px)}to{opacity:1;transform:translate(-50%,0)}}
+
+.hud{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));background:linear-gradient(rgba(10,9,8,.85),rgba(10,9,8,0))}
+.pips{display:flex;gap:4px;flex:1;max-width:240px}
+.pip{flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.16)}
+.pip.done{background:var(--leaf)}
+.pip.now{background:var(--ember)}
+.hud-score{font-family:var(--font-display);font-weight:900;font-size:22px;letter-spacing:.02em;font-variant-numeric:tabular-nums;color:var(--lamp)}
+.hud-score small{font-family:var(--font-body);font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-left:4px}
+.skip{position:absolute;top:46px;right:max(16px,env(safe-area-inset-right,0px));z-index:5;background:rgba(18,16,14,.75);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--muted)}
+
+.dialog{position:absolute;left:0;right:0;bottom:0;z-index:6;padding:28px max(16px,env(safe-area-inset-right,0px)) 18px max(16px,env(safe-area-inset-left,0px));background:linear-gradient(rgba(10,9,8,0),rgba(10,9,8,.75) 40%)}
+.box{position:relative;background:rgba(20,17,14,.94);border:1px solid var(--line);border-radius:16px;padding:20px 18px 12px}
+.who{position:absolute;top:-13px;left:16px;background:var(--ember);color:#1d0e04;font-weight:800;font-size:13px;letter-spacing:.03em;padding:4px 12px;border-radius:999px}
+.who[data-c="nisa"]{background:var(--leaf)}
+.who[data-c="ijah"],.who[data-c="udin"],.who[data-c="fajar"]{background:#e9d8b8}
+.who[data-c="pembeli"]{background:#9fb4d8}
+.who[data-c="dimas"]{background:#b6d98b}
+#text{margin:0;font-size:17px;line-height:1.55;min-height:4.65em}
+.box.nar #text{font-style:italic;color:#e6dccf}
+.hint{display:flex;justify-content:flex-end;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:4px;opacity:0;transition:opacity .2s}
+.hint.on{opacity:1;animation:blink 1.4s ease-in-out infinite}
+@keyframes blink{50%{opacity:.35}}
+
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:8;background:rgba(18,16,14,.97);border-top:2px solid var(--ember);border-radius:20px 20px 0 0;padding:20px max(16px,env(safe-area-inset-right,0px)) 20px max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:14px;animation:sheet .3s ease-out;max-height:82%;overflow-y:auto}
+@keyframes sheet{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--ember)}
+.q-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.bonus-lbl{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
+.bonus-lbl b{color:var(--lamp);font-variant-numeric:tabular-nums}
+.timebar{height:6px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden;margin-top:-6px}
+.timebar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--ember),var(--lamp));border-radius:3px;transform-origin:left center}
+.q{font-size:19px;font-weight:800;line-height:1.35;text-wrap:balance;margin:0}
+.opts{display:flex;flex-direction:column;gap:10px}
+.opt{display:flex;gap:12px;align-items:flex-start;text-align:left;background:var(--ash);border:1.5px solid var(--line);border-radius:14px;padding:13px 14px;font-size:15px;line-height:1.45;transition:border-color .15s,background .15s}
+.opt:hover{border-color:var(--ember)}
+.opt:active{background:#352d25}
+.opt b{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--coal);color:var(--lamp);font-family:var(--font-display);font-size:16px}
+
+.fact{border-top-color:var(--leaf)}
+.badge-row{display:flex;gap:14px;align-items:center}
+.medal{flex:none;width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#86dba0,#2f8a52);box-shadow:0 0 0 4px rgba(98,196,131,.22)}
+.medal svg{width:30px;height:30px;stroke:#0e2416;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.badge-name{font-family:var(--font-display);font-weight:900;font-size:28px;line-height:1;letter-spacing:.01em}
+.plus{color:var(--leaf);font-weight:800;font-size:13px;margin-top:4px}
+.fact p{margin:0;font-size:15px;line-height:1.6;color:#e9e0d4}
+.btn{border:none;border-radius:14px;padding:14px 18px;font-weight:800;font-size:16px;background:var(--ember);color:#1d0e04}
+.btn.alt{background:transparent;border:1.5px solid var(--line);color:var(--fg)}
+.btn.green{background:var(--leaf);color:#0b2414}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap}
+.btn-row .btn{flex:1 1 140px}
+
+.chapter{position:absolute;inset:0;z-index:9;display:flex;flex-direction:column;justify-content:center;gap:6px;padding-inline:max(28px,env(safe-area-inset-left,0px));background:rgba(10,9,8,.72);animation:fade .35s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.chapter .num{font-family:var(--font-display);font-weight:900;font-size:110px;line-height:.85;color:var(--lamp);font-variant-numeric:tabular-nums}
+.chapter .num span{font-size:40px;color:var(--muted)}
+.chapter .loc{font-family:var(--font-display);font-weight:700;font-size:34px;line-height:1.05;text-wrap:balance}
+.chapter .tap{margin-top:18px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+.glapfx{position:absolute;inset:0;z-index:10;display:grid;place-items:center;background:#000;font-family:var(--font-display);font-weight:900;font-size:120px;letter-spacing:.02em;color:#f4ede4}
+.glapfx.run{animation:flick 1.7s steps(1,end) forwards}
+.glapfx.run span{animation:shake .5s .7s ease-out both}
+@keyframes flick{0%{background:#fff8e6;color:transparent}8%{background:#000}14%{background:#fff8e6}20%{background:#000}26%{background:#ffeec9}34%,100%{background:#000;color:#f4ede4}}
+@keyframes shake{0%{transform:scale(1.6);opacity:0}40%{transform:scale(.95);opacity:1}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}100%{transform:none}}
+
+.screen{position:absolute;inset:0;z-index:20;overflow-y:auto;padding:28px max(18px,env(safe-area-inset-right,0px)) 28px max(18px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:18px}
+
+#title{background:radial-gradient(120% 60% at 50% 18%,rgba(255,211,107,.22),rgba(18,16,14,0) 60%),var(--coal);justify-content:center}
+.bulb{width:96px;height:auto;margin:0 auto -6px;display:block}
+.bulb .glass{animation:hum 3.2s ease-in-out infinite}
+@keyframes hum{0%,100%{opacity:1}47%{opacity:1}48%{opacity:.25}50%{opacity:1}52%{opacity:.4}53%{opacity:1}}
+.logo{font-family:var(--font-display);font-weight:900;font-size:clamp(96px,30vw,140px);line-height:.82;text-align:center;color:var(--lamp);text-shadow:0 0 28px rgba(255,211,107,.45);margin:0}
+.tagline{font-family:var(--font-display);font-weight:700;font-size:26px;text-align:center;letter-spacing:.06em;text-transform:uppercase;margin:0}
+.lede{text-align:center;color:var(--muted);font-size:15px;line-height:1.55;max-width:32ch;margin:0 auto}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.field input{background:var(--ash);border:1.5px solid var(--line);border-radius:14px;padding:14px;font:inherit;font-size:17px;color:var(--fg);user-select:text;-webkit-user-select:text}
+.field input:focus{border-color:var(--lamp);outline:none}
+.err{color:var(--danger);font-size:13px;font-weight:700;min-height:1.2em;margin:0}
+.links{display:flex;justify-content:center;gap:20px}
+.link{background:none;border:none;color:var(--muted);font-weight:700;font-size:14px;text-decoration:underline;text-underline-offset:3px;padding:6px}
+.foot{font-size:11px;color:#8c8174;text-align:center;line-height:1.5;margin:0}
+
+#bad{background:linear-gradient(rgba(30,8,6,.55),rgba(14,10,8,.96) 45%);justify-content:flex-end}
+.tag{align-self:flex-start;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;padding:5px 10px;border-radius:6px;background:var(--danger);color:#2a0705}
+.tag.good{background:var(--leaf);color:#0b2414}
+.big-title{font-family:var(--font-display);font-weight:900;font-size:64px;line-height:.9;margin:0;text-wrap:balance}
+#bad .big-title{color:var(--danger)}
+.story{font-size:16px;line-height:1.6;margin:0;color:#efe5d9}
+.should{background:rgba(98,196,131,.1);border:1px solid rgba(98,196,131,.4);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.should strong{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--leaf)}
+.should p{margin:0;font-size:15px;line-height:1.55}
+.stats{display:flex;gap:10px}
+.stat{flex:1;background:var(--ash);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat span{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat b{font-family:var(--font-display);font-size:30px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
+
+#board,#about{background:var(--coal)}
+#end{background:radial-gradient(120% 50% at 50% 0%,rgba(255,211,107,.18),rgba(18,16,14,0) 60%),var(--coal)}
+.card{background:linear-gradient(160deg,#2a231c,#16130f);border:1px solid #5a4c3c;border-radius:20px;padding:20px 16px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+.card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-end}
+.card-head .who-name{font-family:var(--font-display);font-weight:900;font-size:34px;line-height:1;overflow-wrap:anywhere}
+.card-head .pts{font-family:var(--font-display);font-weight:900;font-size:44px;line-height:.9;color:var(--lamp);font-variant-numeric:tabular-nums;text-align:right}
+.card-head .pts small{display:block;font-family:var(--font-body);font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--muted)}
+.card-sub{font-size:13px;color:var(--muted);margin:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.gb{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.04);border-radius:12px;padding:8px 10px;min-width:0}
+.gb .medal{width:36px;height:36px;box-shadow:none}
+.gb .medal svg{width:19px;height:19px}
+.gb div{min-width:0}
+.gb b{display:block;font-size:13px;line-height:1.2}
+.gb span{display:block;font-size:11px;color:var(--muted);line-height:1.3}
+.gmp{font-size:14px;line-height:1.55;margin:0;color:#efe5d9}
+.gmp strong{color:var(--lamp)}
+
+.board-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.board-list li{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;background:var(--ash);border-radius:12px;padding:10px 12px}
+.board-list li.me{outline:2px solid var(--lamp)}
+.board-list li.t1{background:linear-gradient(90deg,#8a6a12,#4a3a10 80%);box-shadow:inset 0 0 0 2px #ffd36b}
+.board-list li.t2{background:linear-gradient(90deg,#69717c,#3c4148 80%);box-shadow:inset 0 0 0 2px #d4dbe3}
+.board-list li.t3{background:linear-gradient(90deg,#8c5528,#4a2f18 80%);box-shadow:inset 0 0 0 2px #e0a067}
+.board-list li.t4{background:linear-gradient(90deg,#1f5a66,#1b3a42 80%);box-shadow:inset 0 0 0 2px #4fb3c8}
+.board-list .rk{font-family:var(--font-display);font-weight:900;font-size:24px;color:var(--muted);text-align:center}
+
+.board-list .nm{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.board-list .meta{font-size:12px;color:var(--muted)}
+.board-list .sc{font-family:var(--font-display);font-weight:900;font-size:26px;font-variant-numeric:tabular-nums}
+.empty{color:var(--muted);text-align:center;padding:24px 0;margin:0}
+.h2{font-family:var(--font-display);font-weight:900;font-size:44px;line-height:1;margin:0}
+.note{font-size:13px;color:var(--muted);line-height:1.5;margin:0}
+.src{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.5}
+.src a{color:var(--lamp)}
+.sync{font-size:13px;font-weight:700;color:var(--muted);margin:0;min-height:1.2em}
+.sync.ok{color:var(--leaf)}
+.sync.warn{color:var(--lamp)}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bg" class="bg"></div>
+  <div id="portrait" class="portrait" hidden></div>
+
+  <header class="hud" id="hud" hidden>
+    <div class="pips" id="pips" aria-label="Kemajuan adegan"></div>
+    <div class="hud-score"><span id="scoreVal">0</span><small>poin</small></div>
+  </header>
+  <button class="skip" id="skipBtn" type="button" hidden>Lewati dialog ›</button>
+
+  <div class="dialog" id="dialog" hidden>
+    <div class="box" id="box">
+      <div class="who" id="who" hidden></div>
+      <p id="text" aria-live="polite"></p>
+      <div class="hint" id="hint">ketuk untuk lanjut ▾</div>
+    </div>
+  </div>
+
+  <div class="sheet" id="choice" hidden>
+    <div class="q-top"><div class="eyebrow" id="qEyebrow"></div><div class="bonus-lbl">Bonus cepat <b id="bonusNow">+50</b></div></div>
+    <div class="timebar" aria-hidden="true"><i id="timeFill"></i></div>
+    <p class="q" id="q"></p>
+    <div class="opts" id="opts"></div>
+  </div>
+
+  <div class="sheet fact" id="fact" hidden>
+    <div class="badge-row">
+      <div class="medal" id="factMedal"></div>
+      <div>
+        <div class="eyebrow" style="color:var(--leaf)">Lencana didapat</div>
+        <div class="badge-name" id="factName"></div>
+        <div class="plus" id="factPlus">+100 poin</div>
+      </div>
+    </div>
+    <p id="factText"></p>
+    <button class="btn green" id="factNext" type="button">Lanjut</button>
+  </div>
+
+  <div class="chapter" id="chapter" hidden>
+    <div class="num" id="chNum"></div>
+    <div class="loc" id="chLoc"></div>
+    <div class="tap">ketuk untuk mulai</div>
+  </div>
+
+  <div class="glapfx" id="glapfx" hidden><span>GLAP!</span></div>
+
+  <section class="screen" id="title">
+    <svg class="bulb" viewBox="0 0 100 130" aria-hidden="true">
+      <g class="glass"><circle cx="50" cy="50" r="46" fill="#ffd36b" opacity=".18"/><path d="M50 12a32 32 0 0 0-19 58c5 4 7 9 7 15h24c0-6 2-11 7-15a32 32 0 0 0-19-58z" fill="#ffd36b"/><path d="M42 58l8-10 8 10" fill="none" stroke="#a8641b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <rect x="37" y="88" width="26" height="8" rx="3" fill="#8c8174"/><rect x="38" y="98" width="24" height="8" rx="3" fill="#6f665c"/><rect x="42" y="108" width="16" height="7" rx="3" fill="#4f4840"/>
+    </svg>
+    <h1 class="logo">GLAP!</h1>
+    <p class="tagline">Kepala Tambang Sehari</p>
+    <p class="lede">Satu malam tanpa listrik. Sepuluh keputusan di tambang batubara. Seberapa jauh ceritamu?</p>
+    <div class="field">
+      <label for="nameInput">Nama kamu</label>
+      <input id="nameInput" type="text" maxlength="20" autocomplete="off" placeholder="Tulis namamu">
+      <p class="err" id="nameErr"></p>
+    </div>
+    <button class="btn" id="startBtn" type="button">Mulai main</button>
+    <div class="links">
+      <button class="link" id="boardLink" type="button">Papan skor</button>
+      <button class="link" id="aboutLink" type="button">Sumber fakta</button>
+    </div>
+    <p class="foot">Tokoh dan Desa Tambak Rindang dalam game ini adalah fiksi.</p>
+  </section>
+
+  <section class="screen" id="bad" hidden></section>
+  <section class="screen" id="end" hidden></section>
+  <section class="screen" id="board" hidden></section>
+
+  <section class="screen" id="about" hidden>
+    <h2 class="h2">Sumber fakta</h2>
+    <p class="note">Angka di dalam game diambil dari sumber berikut. Cerita, tokoh, dan nama desa adalah fiksi.</p>
+    <ol class="src">
+      <li>Kementerian ESDM, Jan–Okt 2025: 66,5% listrik nasional dari batubara. <a href="https://investortrust.id/business/85441/produksi-listrik-nasional-tembus-290-twh-batu-bara-masih-dominan-66" target="_blank" rel="noopener">InvestorTrust</a></li>
+      <li>Produksi batubara 2025: 790 juta ton, 32% dipakai di dalam negeri. <a href="https://ekonomi.bisnis.com/read/20260108/44/1942669/produksi-batu-bara-ri-masih-jor-joran-capai-790-juta-ton-pada-2025" target="_blank" rel="noopener">Bisnis.com</a></li>
+      <li>Pemakaian batubara dalam negeri per sektor, Jan–Okt 2025. <a href="https://ekonomi.bisnis.com/read/20251204/44/1934035/180-juta-ton-batu-bara-dibakar-di-dalam-negeri-per-oktober-2025-intip-sektor-terbesar" target="_blank" rel="noopener">Bisnis.com</a></li>
+      <li>Harga batubara untuk kelistrikan USD 70/ton sejak 2018. <a href="https://www.cnbcindonesia.com/news/20260622192933-4-744811/harga-patokan-dmo-batu-bara-us-70-ton-bakal-diubah-ini-kata-esdm" target="_blank" rel="noopener">CNBC Indonesia</a></li>
+      <li>Pemakaian batubara dunia untuk listrik dan baja. <a href="https://www.iea.org/reports/coal-2025/demand" target="_blank" rel="noopener">IEA Coal 2025</a></li>
+      <li>Reklamasi paling lambat 30 hari setelah lahan selesai ditambang, jaminan reklamasi, dan sanksinya (PP 78/2010, UU Minerba). <a href="https://siplawfirm.id/id/publikasi/reklamasi-tambang-kewajiban-dan-risiko-hukum" target="_blank" rel="noopener">SIP Law Firm</a></li>
+      <li>Pedoman PPM, Kepmen ESDM 1824 K/30/MEM/2018. <a href="https://jdih.esdm.go.id/storage/document/Keputusan%20Menteri%20ESDM%20Nomor%201824%20K%2030%20MEM%202018.pdf" target="_blank" rel="noopener">JDIH ESDM</a></li>
+      <li>Kaidah teknik pertambangan yang baik, Kepmen ESDM 1827 K/30/MEM/2018. <a href="https://www.iea.org/policies/28226" target="_blank" rel="noopener">IEA Policy Database</a></li>
+    </ol>
+    <button class="btn alt" id="aboutBack" type="button">Kembali</button>
+  </section>
+</div>
+
+<script src="config.js"></script>
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- penyimpanan lokal (aman bila diblokir) ---------- */
+const BOARD_KEY = "glap-papan-v1", NAME_KEY = "glap-nama";
+function load(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
+function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+/* ---------- tokoh ---------- */
+function avatar(o){
+  const hj = !!o.hijab;
+  const ey = hj ? 114 : 108;
+  let s = '<svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">';
+  s += '<path d="M16 240 C20 188 56 166 100 166 C144 166 180 188 184 240 Z" fill="'+o.top+'"/>';
+  if(o.tie){ s += '<path d="M80 168 L100 190 L120 168 Z" fill="#f2efe8"/><path d="M95 178 L100 184 L105 178 L109 222 L100 232 L91 222 Z" fill="#b8423a"/>'; }
+  if(o.vest){ s += '<path d="M34 240 C38 200 58 180 82 170 L94 240 Z" fill="#ff7a1a"/><path d="M166 240 C162 200 142 180 118 170 L106 240 Z" fill="#ff7a1a"/><rect x="40" y="210" width="52" height="8" fill="#e8edf0"/><rect x="108" y="210" width="52" height="8" fill="#e8edf0"/>'; }
+  if(!hj){ s += '<rect x="86" y="138" width="28" height="36" rx="10" fill="'+o.skin+'"/>'; }
+  if(hj){
+    s += '<path d="M44 120 C42 62 70 42 100 42 C130 42 158 62 156 120 C158 154 150 178 100 190 C50 178 42 154 44 120 Z" fill="'+o.hijab+'"/>';
+    s += '<ellipse cx="100" cy="116" rx="35" ry="41" fill="'+o.skin+'"/>';
+    s += '<path d="M62 100 C66 70 134 70 138 100 C128 84 72 84 62 100 Z" fill="'+o.hijab+'"/>';
+  } else {
+    s += '<circle cx="58" cy="112" r="9" fill="'+o.skin+'"/><circle cx="142" cy="112" r="9" fill="'+o.skin+'"/>';
+    s += '<ellipse cx="100" cy="108" rx="42" ry="48" fill="'+o.skin+'"/>';
+    if(o.hair && !o.helmet){ s += '<path d="M56 104 C50 56 82 46 102 48 C130 50 152 62 144 104 C140 84 124 74 100 76 C80 76 62 84 56 104 Z" fill="'+o.hair+'"/>'; }
+    if(o.hair && o.helmet){ s += '<path d="M58 96 L58 112 L64 112 L64 96 Z M136 96 L136 112 L142 112 L142 96 Z" fill="'+o.hair+'"/>'; }
+  }
+  s += '<ellipse cx="85" cy="'+ey+'" rx="4.5" ry="5.5" fill="#1d1612"/><ellipse cx="115" cy="'+ey+'" rx="4.5" ry="5.5" fill="#1d1612"/>';
+  s += '<path d="M76 '+(ey-12)+' q9 -5 17 0 M107 '+(ey-12)+' q9 -5 17 0" stroke="#2a1d16" stroke-width="3" fill="none" stroke-linecap="round"/>';
+  s += '<circle cx="76" cy="'+(ey+14)+'" r="7" fill="#e0756a" opacity=".22"/><circle cx="124" cy="'+(ey+14)+'" r="7" fill="#e0756a" opacity=".22"/>';
+  if(o.glasses){ s += '<g fill="none" stroke="#2a2420" stroke-width="2.5"><circle cx="85" cy="'+ey+'" r="11"/><circle cx="115" cy="'+ey+'" r="11"/><path d="M96 '+ey+' h8"/></g>'; }
+  if(o.mustache){ s += '<path d="M86 '+(ey+17)+' q14 -7 28 0 q-14 4 -28 0 z" fill="#2a1d16"/>'; }
+  s += '<path d="M90 '+(ey+24)+' q10 8 20 0" stroke="#7a3b2e" stroke-width="3" fill="none" stroke-linecap="round"/>';
+  if(o.helmet){
+    const t = hj ? 44 : 40;
+    s += '<path d="M54 '+(t+48)+' C54 '+(t+4)+' 78 '+(t-6)+' 100 '+(t-6)+' C122 '+(t-6)+' 146 '+(t+4)+' 146 '+(t+48)+' Z" fill="'+o.helmet+'"/>';
+    s += '<rect x="42" y="'+(t+42)+'" width="116" height="12" rx="6" fill="'+o.helmet+'"/>';
+    s += '<path d="M100 '+(t-4)+' V'+(t+44)+'" stroke="rgba(0,0,0,.13)" stroke-width="9"/>';
+  }
+  return s + '</svg>';
+}
+const CH = {
+  raka:    {name:"Yandi", av:avatar({skin:"#c68a5e", hair:"#1b1714", top:"#3b6ea5"})},
+  rakaApd: {name:"Yandi", av:avatar({skin:"#c68a5e", hair:"#1b1714", top:"#3b6ea5", helmet:"#f4f1ea", vest:true})},
+  nisa:    {name:"Kak Kiky", av:avatar({skin:"#d39a72", hijab:"#2f5a66", top:"#3c4a3f", helmet:"#f4f1ea", vest:true})},
+  ijah:    {name:"Acil Siti", av:avatar({skin:"#b97c54", hijab:"#8c4a6b", top:"#c9a14a"})},
+  udin:    {name:"Mang Ifan", av:avatar({skin:"#a8714a", hair:"#2a1d16", top:"#55684a", helmet:"#f2c230", vest:true, mustache:true})},
+  pembeli: {name:"Pembeli", av:avatar({skin:"#e0b08a", hair:"#222", top:"#2c2f3a", tie:true})},
+  dimas:   {name:"Firhan", av:avatar({skin:"#c98d63", hair:"#3a2618", top:"#6a994e"})},
+  fajar:   {name:"Agri", av:avatar({skin:"#c28a62", hair:"#1e1714", top:"#dcd5c8", glasses:true})}
+};
+
+/* ---------- ikon lencana ---------- */
+const IC = {
+  helmet:'<path d="M4 16a8 8 0 0 1 16 0"/><path d="M2 16h20v3H2z"/><path d="M12 8v5"/>',
+  doc:'<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 14l2 2 4-4"/>',
+  people:'<circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 20c0-4 3-6 6-6s6 2 6 6"/><path d="M15 14.5c3.5 0 7 1.5 7 5.5"/>',
+  layers:'<path d="M12 3l9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/>',
+  drop:'<path d="M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z"/><path d="M9 14a3 3 0 0 0 3 3"/>',
+  bulb:'<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c1 1 1 2 1 3.5h6c0-1.5 0-2.5 1-3.5A6 6 0 0 0 12 3z"/>',
+  factory:'<path d="M3 21V10l5 3v-3l5 3V5h4v16z"/><path d="M2 21h20"/>',
+  house:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+  check:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 12l3 3 5-6"/>',
+  sprout:'<path d="M12 21v-9"/><path d="M12 12C12 8 9 6 5 6c0 4 3 6 7 6z"/><path d="M12 10c0-3 2-5 6-5 0 3-2 5-6 5z"/>'
+};
+const icon = k => '<svg viewBox="0 0 24 24" aria-hidden="true">'+IC[k]+'</svg>';
+
+/* ---------- latar ---------- */
+function rng(seed){ let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function skyline(seed, base, lit, col){
+  const r = rng(seed); let x = -6, out = "";
+  while(x < 404){
+    const w = 30 + r()*42, h = 60 + r()*170, top = base - h;
+    out += '<rect x="'+x.toFixed(0)+'" y="'+top.toFixed(0)+'" width="'+w.toFixed(0)+'" height="'+(h+500).toFixed(0)+'" fill="'+col+'"/>';
+    if(lit){ for(let wy = top + 10; wy < base - 8; wy += 15){ for(let wx = x + 6; wx < x + w - 8; wx += 11){ if(r() < .55) out += '<rect x="'+wx.toFixed(0)+'" y="'+wy.toFixed(0)+'" width="5" height="8" fill="#ffd36b" opacity="'+(.55 + r()*.45).toFixed(2)+'"/>'; } } }
+    x += w + 2;
+  }
+  return out;
+}
+function stars(seed, n, ymax){ const r = rng(seed); let o = ""; for(let i=0;i<n;i++){ o += '<circle cx="'+(r()*400).toFixed(0)+'" cy="'+(r()*ymax).toFixed(0)+'" r="'+(.6 + r()*1.3).toFixed(1)+'" fill="#fff" opacity="'+(.3 + r()*.7).toFixed(2)+'"/>'; } return o; }
+const LBL = 'font-family="Plus Jakarta Sans,system-ui,sans-serif" font-weight="800" fill="#fff" style="paint-order:stroke;stroke:rgba(0,0,0,.55);stroke-width:3px"';
+const SIGN = 'font-family="Big Shoulders Display,Impact,sans-serif" font-weight="900"';
+const svgWrap = inner => '<svg viewBox="0 0 400 720" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'+inner+'</svg>';
+function house(x, y, w, body, roof){ return '<g><path d="M'+(x+8)+' '+(y+56)+' v34 M'+(x+w-8)+' '+(y+56)+' v34 M'+(x+w/2)+' '+(y+56)+' v34" stroke="#5b3e2a" stroke-width="5"/><rect x="'+x+'" y="'+(y+14)+'" width="'+w+'" height="44" fill="'+body+'"/><path d="M'+(x-8)+' '+(y+16)+' L'+(x+w/2)+' '+(y-22)+' L'+(x+w+8)+' '+(y+16)+' Z" fill="'+roof+'"/><rect x="'+(x+w/2-8)+'" y="'+(y+28)+'" width="16" height="30" fill="#5b3e2a"/></g>'; }
+function tree(x, y, r, c){ return '<rect x="'+(x-3)+'" y="'+y+'" width="6" height="'+(r*1.6)+'" fill="#5b3e2a"/><circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+c+'"/>'; }
+
+const EXCAVATOR =
+  '<g transform="translate(36 190)">'+
+  '<rect x="0" y="-28" width="138" height="28" rx="14" fill="#262626"/><rect x="7" y="-22" width="124" height="16" rx="8" fill="#3b3b3b"/>'+
+  '<circle cx="15" cy="-14" r="10" fill="#575757"/><circle cx="123" cy="-14" r="10" fill="#575757"/><circle cx="44" cy="-12" r="6" fill="#575757"/><circle cx="69" cy="-12" r="6" fill="#575757"/><circle cx="94" cy="-12" r="6" fill="#575757"/>'+
+  '<rect x="40" y="-37" width="62" height="10" fill="#2f2f2f"/>'+
+  '<path d="M88 -52 C108 -122 150 -142 188 -128" fill="none" stroke="#d9a42a" stroke-width="17" stroke-linecap="round"/>'+
+  '<path d="M88 -52 C108 -122 150 -142 188 -128" fill="none" stroke="#f0bb3a" stroke-width="9" stroke-linecap="round"/>'+
+  '<path d="M80 -46 L130 -108" stroke="#cfcfcf" stroke-width="5" stroke-linecap="round"/><path d="M80 -46 L104 -76" stroke="#8a8a8a" stroke-width="7" stroke-linecap="round"/>'+
+  '<path d="M188 -128 L214 -50" stroke="#e8b030" stroke-width="12" stroke-linecap="round"/><path d="M172 -132 L200 -86" stroke="#cfcfcf" stroke-width="4" stroke-linecap="round"/>'+
+  '<path d="M206 -58 L234 -46 L227 -15 Q212 -4 199 -17 Z" fill="#4a4a4a"/><path d="M200 -17 l-5 7 l9 -2 z M209 -10 l-3 8 l8 -4 z M219 -8 l0 8 l6 -6 z" fill="#2c2c2c"/>'+
+  '<circle cx="188" cy="-128" r="4.5" fill="#3a3a3a"/><circle cx="214" cy="-50" r="4.5" fill="#3a3a3a"/>'+
+  '<path d="M3 -37 V-62 Q3 -77 18 -77 H98 V-37 Z" fill="#e8b030"/><path d="M3 -37 V-62 Q3 -77 18 -77 H28 V-37 Z" fill="#c38c1c"/>'+
+  '<path d="M40 -66 h34 M40 -58 h34 M40 -50 h34" stroke="#b9861b" stroke-width="3"/><rect x="52" y="-90" width="5" height="13" fill="#333"/>'+
+  '<path d="M96 -37 V-110 H122 L131 -96 V-37 Z" fill="#e8b030"/><path d="M101 -104 H119 L126 -93 V-70 H101 Z" fill="#9cc9d6"/><path d="M104 -100 L112 -100 L104 -88 Z" fill="#fff" opacity=".5"/>'+
+  '<circle cx="88" cy="-52" r="5" fill="#3a3a3a"/>'+
+  '</g>';
+
+const BG = {
+  kamar: () => svgWrap(
+    '<defs><radialGradient id="kg" cx=".28" cy=".2" r=".75"><stop offset="0" stop-color="#ffcf8a" stop-opacity=".5"/><stop offset="1" stop-color="#ffcf8a" stop-opacity="0"/></radialGradient><clipPath id="kw"><rect x="232" y="110" width="132" height="190"/></clipPath></defs>'+
+    '<rect width="400" height="720" fill="#3d2c20"/><rect y="540" width="400" height="180" fill="#2a1d14"/>'+
+    '<g clip-path="url(#kw)"><rect x="232" y="110" width="132" height="190" fill="#16203a"/>'+stars(3,14,200)+skyline(7,300,true,"#0d1324")+'</g>'+
+    '<rect x="232" y="110" width="132" height="190" fill="none" stroke="#5a4232" stroke-width="10"/><path d="M298 110v190" stroke="#5a4232" stroke-width="6"/>'+
+    '<rect width="400" height="720" fill="url(#kg)"/>'+
+    '<circle cx="110" cy="330" r="46" fill="none" stroke="#fff4dc" stroke-width="10"/><path d="M110 376V560M110 560l-30 42M110 560l30 42" stroke="#1a1410" stroke-width="6" stroke-linecap="round"/><rect x="98" y="312" width="24" height="42" rx="4" fill="#111"/>'),
+  glap: () => svgWrap(
+    '<defs><clipPath id="gw"><rect x="232" y="110" width="132" height="190"/></clipPath><radialGradient id="pg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#9ec5ff" stop-opacity=".35"/><stop offset="1" stop-color="#9ec5ff" stop-opacity="0"/></radialGradient></defs>'+
+    '<rect width="400" height="720" fill="#07070a"/>'+
+    '<g clip-path="url(#gw)"><rect x="232" y="110" width="132" height="190" fill="#0c1120"/>'+stars(5,22,220)+'<circle cx="335" cy="145" r="12" fill="#d9dde8" opacity=".7"/>'+skyline(7,300,false,"#05070d")+'</g>'+
+    '<rect x="232" y="110" width="132" height="190" fill="none" stroke="#141110" stroke-width="10"/>'+
+    '<circle cx="110" cy="334" r="80" fill="url(#pg)"/><rect x="98" y="312" width="24" height="42" rx="4" fill="#111" stroke="#2c3550"/><text x="110" y="338" text-anchor="middle" font-size="9" font-weight="800" font-family="Plus Jakarta Sans,sans-serif" fill="#ff6b5b">8%</text>'),
+  gerbang: () => svgWrap(
+    '<defs><linearGradient id="gs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fbcd8"/><stop offset="1" stop-color="#f6c28b"/></linearGradient></defs>'+
+    '<rect width="400" height="460" fill="url(#gs)"/><path d="M0 380 Q90 320 170 360 T400 340 V460 H0Z" fill="#6d7f5a"/>'+
+    '<rect y="440" width="400" height="280" fill="#9a7552"/><path d="M150 440 L250 440 L400 720 L0 720Z" fill="#7d5d40"/>'+
+    '<rect x="40" y="246" width="186" height="88" rx="4" fill="#1f3b2d"/><path d="M76 334v116M190 334v116" stroke="#3a3a3a" stroke-width="6"/>'+
+    '<text x="133" y="282" text-anchor="middle" font-size="26" fill="#fff" '+SIGN+'>AREA TAMBANG</text><text x="133" y="314" text-anchor="middle" font-size="17" fill="#ffd36b" '+SIGN+'>WAJIB APD · TAMU LAPOR</text>'+
+    '<rect x="196" y="378" width="14" height="80" fill="#444"/><rect x="210" y="388" width="190" height="12" fill="#f4f1ea"/>'+
+    [0,1,2,3,4].map(i => '<rect x="'+(222 + i*38)+'" y="388" width="18" height="12" fill="#d63c32"/>').join("")+
+    '<path d="M240 520 L400 488 L400 610 L262 610 Z" fill="#e2b12f"/><rect x="250" y="600" width="150" height="22" fill="#b98d1c"/>'+
+    '<circle cx="300" cy="640" r="44" fill="#1b1b1b"/><circle cx="300" cy="640" r="16" fill="#555"/><circle cx="400" cy="640" r="44" fill="#1b1b1b"/>'),
+  kantor: () => svgWrap(
+    '<rect width="400" height="720" fill="#2c3a3d"/><rect y="560" width="400" height="160" fill="#1f2729"/>'+
+    '<rect x="44" y="90" width="120" height="170" fill="#a9d1e0"/><path d="M104 90v170M44 175h120" stroke="#3d4b4f" stroke-width="6"/><rect x="44" y="90" width="120" height="170" fill="none" stroke="#3d4b4f" stroke-width="8"/>'+
+    '<rect x="180" y="110" width="176" height="230" fill="#ece5d6"/><text x="268" y="138" text-anchor="middle" font-size="15" fill="#2a2a2a" '+SIGN+'>PETA SEBARAN BATUBARA</text>'+
+    '<rect x="192" y="150" width="152" height="26" fill="#6b4a2e"/><rect x="192" y="176" width="152" height="56" fill="#9a8a75"/><rect x="192" y="232" width="152" height="26" fill="#161616"/><rect x="192" y="258" width="152" height="64" fill="#8a8478"/>'+
+    '<circle cx="246" cy="245" r="6" fill="#d63c32"/><circle cx="310" cy="240" r="6" fill="#d63c32"/>'+
+    '<rect y="500" width="400" height="34" fill="#5b3e2a"/><path d="M40 534v90M360 534v90" stroke="#3e2a1c" stroke-width="10"/><rect x="230" y="474" width="70" height="26" rx="3" fill="#ece5d6"/><rect x="90" y="470" width="40" height="30" rx="4" fill="#c97b3a"/>'),
+  desa: () => svgWrap(
+    '<defs><linearGradient id="ds" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fd3e8"/><stop offset="1" stop-color="#e8f3ea"/></linearGradient></defs>'+
+    '<rect width="400" height="720" fill="url(#ds)"/><rect y="430" width="400" height="190" fill="#7da35a"/>'+
+    tree(40,330,46,"#3f7d4e")+tree(360,320,52,"#356b43")+tree(300,360,34,"#4b8d5a")+
+    house(60,360,90,"#b98a5c","#7a3e2b")+house(220,350,120,"#c69a6a","#8a4630")+
+    '<rect x="236" y="300" width="88" height="20" rx="3" fill="#1f3b2d"/><text x="280" y="315" text-anchor="middle" font-size="12" fill="#fff" '+SIGN+'>BALAI DESA</text>'+
+    '<rect y="600" width="400" height="120" fill="#3d7f95"/><path d="M0 630 q25 -8 50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0" fill="none" stroke="#a6d8e6" stroke-width="3" opacity=".6"/>'),
+  lahan: () => svgWrap(
+    '<defs><linearGradient id="ls" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fd0e6"/><stop offset="1" stop-color="#f2e6cf"/></linearGradient><pattern id="ob" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M0 22L22 0" stroke="#000" stroke-opacity=".12" stroke-width="3"/></pattern></defs>'+
+    '<rect width="400" height="200" fill="url(#ls)"/>'+tree(330,150,30,"#3f7d4e")+tree(370,160,24,"#4b8d5a")+
+    '<rect y="190" width="400" height="80" fill="#5a3a22"/>'+[...Array(26)].map((_,i)=>'<circle cx="'+(8+i*15)+'" cy="'+(205+(i%3)*20)+'" r="2.5" fill="#7d5636"/>').join("")+
+    '<rect y="270" width="400" height="190" fill="#857865"/><rect y="270" width="400" height="190" fill="url(#ob)"/>'+
+    '<rect y="460" width="400" height="74" fill="#121212"/><path d="M0 482 L400 474 M0 506 L400 500" stroke="#3a3a3a" stroke-width="2"/>'+
+    '<rect y="534" width="400" height="186" fill="#6d6458"/><rect y="534" width="400" height="186" fill="url(#ob)"/>'+
+    EXCAVATOR+
+    '<text x="354" y="236" text-anchor="end" font-size="14" '+LBL+'>Tanah pucuk</text><text x="354" y="370" text-anchor="end" font-size="14" '+LBL+'>Tanah penutup</text><text x="354" y="502" text-anchor="end" font-size="14" '+LBL+'>Batubara</text>'),
+  kolam: () => svgWrap(
+    '<rect width="400" height="210" fill="#cfe6ef"/>'+tree(60,170,30,"#3f7d4e")+tree(350,165,36,"#356b43")+
+    '<rect y="200" width="400" height="520" fill="#7c8f5c"/>'+
+    '<path d="M30 250 H250 L236 340 H44 Z" fill="#7a5537"/><path d="M150 390 H370 L356 480 H164 Z" fill="#8a8f6a"/><path d="M40 540 H280 L266 630 H54 Z" fill="#4fa6bc"/>'+
+    '<path d="M236 300 C280 310 270 380 250 395 M190 470 C150 490 140 520 140 545" fill="none" stroke="#d6d6d6" stroke-width="7" stroke-linecap="round"/>'+
+    '<path d="M280 600 C330 610 350 650 400 660 V720 H300 Z" fill="#3d8fa6"/>'+
+    '<rect x="300" y="350" width="24" height="18" rx="3" fill="#f4f1ea"/><rect x="328" y="356" width="24" height="18" rx="3" fill="#f4f1ea"/><text x="326" y="345" text-anchor="middle" font-size="11" '+LBL+'>KAPUR</text>'+
+    '<text x="140" y="300" text-anchor="middle" font-size="13" '+LBL+'>1 · Lumpur mengendap</text><text x="260" y="440" text-anchor="middle" font-size="13" '+LBL+'>2 · Dinetralkan kapur</text><text x="160" y="590" text-anchor="middle" font-size="13" '+LBL+'>3 · Diuji, baru ke sungai</text>'+
+    '<rect x="212" y="216" width="144" height="28" rx="3" fill="#1f3b2d"/><text x="284" y="236" text-anchor="middle" font-size="15" fill="#fff" '+SIGN+'>KOLAM PENGENDAPAN</text>'),
+  pelabuhan: () => svgWrap(
+    '<defs><linearGradient id="ps" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a6f9a"/><stop offset="1" stop-color="#f2a65a"/></linearGradient></defs>'+
+    '<rect width="400" height="440" fill="url(#ps)"/><circle cx="300" cy="380" r="40" fill="#ffd36b" opacity=".85"/>'+
+    '<rect y="420" width="400" height="300" fill="#24506b"/><path d="M0 460 q30 -6 60 0 t60 0 t60 0 t60 0 t60 0 t60 0 t60 0" fill="none" stroke="#6fa3bd" stroke-width="2" opacity=".5"/>'+
+    '<path d="M0 360 H190 L210 440 H0 Z" fill="#6a5a48"/><path d="M-10 380 Q40 300 90 380 Z M60 380 Q120 290 180 380 Z" fill="#141414"/>'+
+    '<path d="M150 330 L300 470" stroke="#9a9a9a" stroke-width="8"/><path d="M160 336 L300 470" stroke="#555" stroke-width="2"/>'+
+    '<path d="M200 500 H400 V540 H215 Z" fill="#6b3b2b"/><path d="M220 500 Q300 440 390 500 Z" fill="#141414"/>'),
+  hp: () => svgWrap(
+    '<defs><linearGradient id="hs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#262c4d"/><stop offset="1" stop-color="#0f1222"/></linearGradient></defs>'+
+    '<rect width="400" height="720" fill="url(#hs)"/>'+
+    '<rect x="70" y="80" width="260" height="470" rx="36" fill="#0b0b0f" stroke="#3a3a46" stroke-width="3"/><rect x="82" y="100" width="236" height="432" rx="22" fill="#ece5dd"/>'+
+    '<path d="M82 122 a22 22 0 0 1 22 -22 h192 a22 22 0 0 1 22 22 v26 H82 Z" fill="#2d6a4f"/><text x="104" y="135" font-size="15" '+LBL+'>Firhan</text>'+
+    '<rect x="96" y="166" width="196" height="76" rx="12" fill="#fff"/><text font-size="13" font-family="Plus Jakarta Sans,system-ui,sans-serif" fill="#222"><tspan x="108" y="190">Yan, katanya lo lagi di tambang?</tspan><tspan x="108" y="208">Batubara mah cuma buat</tspan><tspan x="108" y="226">PLTU doang kan?</tspan></text>'+
+    '<rect x="196" y="258" width="108" height="30" rx="12" fill="#d3f2c9"/><text x="250" y="278" text-anchor="middle" font-size="12" font-family="Plus Jakarta Sans,system-ui,sans-serif" fill="#3b5a35">mengetik…</text>'),
+  galeri: () => svgWrap(
+    '<defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fd3e8"/><stop offset="1" stop-color="#e8f3ea"/></linearGradient><pattern id="anyam" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#b38c52"/><path d="M0 3h12M0 9h12" stroke="#d9b877" stroke-width="3"/><path d="M3 0v12M9 0v12" stroke="#8a6a38" stroke-width="2" opacity=".6"/></pattern></defs>'+
+    '<rect width="400" height="720" fill="url(#gg)"/><rect y="430" width="400" height="290" fill="#8fae66"/>'+tree(40,330,44,"#3f7d4e")+tree(370,330,40,"#356b43")+
+    '<rect x="60" y="250" width="280" height="40" fill="#1f3b2d"/><text x="200" y="278" text-anchor="middle" font-size="22" fill="#ffd36b" '+SIGN+'>GALERI ANYAMAN PURUN</text>'+
+    '<path d="M50 290 H350 L330 330 H70 Z" fill="#d6543a"/>'+[0,1,2,3,4,5].map(i=>'<path d="M'+(70+i*44)+' 330 h22 l-4 14 h-14 z" fill="#f4f1ea"/>').join("")+
+    '<rect x="80" y="330" width="240" height="130" fill="#a5734a"/><rect x="96" y="350" width="64" height="90" fill="url(#anyam)"/><rect x="170" y="350" width="64" height="90" fill="url(#anyam)"/><rect x="244" y="350" width="60" height="90" fill="url(#anyam)"/>'+
+    '<rect x="60" y="460" width="280" height="22" fill="#6b4a2e"/>'),
+  laporan: () => svgWrap(
+    '<rect width="400" height="720" fill="#141a24"/><rect x="40" y="90" width="150" height="190" fill="#0b1020"/>'+stars(11,16,270).replace(/cy="(\d+)"/g,(m,v)=>'cy="'+(90+ +v*0.68).toFixed(0)+'"').replace(/cx="(\d+)"/g,(m,v)=>'cx="'+(40+ +v*0.37).toFixed(0)+'"')+
+    '<rect x="40" y="90" width="150" height="190" fill="none" stroke="#2c3442" stroke-width="8"/>'+
+    '<circle cx="310" cy="150" r="40" fill="#e9e2d3"/><path d="M310 150 V122 M310 150 L332 150" stroke="#222" stroke-width="5" stroke-linecap="round"/>'+
+    '<rect y="470" width="400" height="250" fill="#3a2a20"/>'+
+    '<path d="M120 470 L280 470 L296 486 H104 Z" fill="#8a8f9a"/><rect x="128" y="352" width="144" height="118" rx="6" fill="#1b2533"/><rect x="136" y="360" width="128" height="102" fill="#1f6f8b"/>'+
+    '<rect x="150" y="420" width="16" height="32" fill="#ffd36b"/><rect x="174" y="404" width="16" height="48" fill="#ffd36b"/><rect x="198" y="430" width="16" height="22" fill="#f0645c"/><rect x="222" y="396" width="16" height="56" fill="#ffd36b"/>'+
+    '<rect x="300" y="440" width="64" height="30" fill="#ece5d6" transform="rotate(-6 332 455)"/><rect x="296" y="432" width="64" height="30" fill="#f7f2e8"/>'),
+  reklamasi: () => svgWrap(
+    '<rect width="400" height="300" fill="#bfe0ee"/><path d="M0 250 Q100 200 200 240 T400 220 V300 H0Z" fill="#7aa05a"/>'+
+    '<path d="M0 290 Q120 260 240 285 T400 280 V720 H0 Z" fill="#c9b48a"/><path d="M0 380 Q200 360 400 380 M0 470 Q200 450 400 470 M0 570 Q200 550 400 570" stroke="#a8936a" stroke-width="3" fill="none"/>'+
+    [...Array(5)].map((_,row)=>[...Array(6)].map((_,c)=>{ const y = 340 + row*90, x = 30 + c*68 + (row%2)*30, s = 6 + row*3; return '<path d="M'+x+' '+y+' l-'+s+' '+(s*2)+' h'+(s*2)+' z" fill="#4f9a5c"/><rect x="'+(x-1.5)+'" y="'+(y+s*2)+'" width="3" height="'+(s)+'" fill="#6b4a2e"/>'; }).join("")).join("")+
+    '<rect x="220" y="250" width="132" height="30" rx="3" fill="#2f6b3f"/><text x="286" y="271" text-anchor="middle" font-size="16" fill="#fff" '+SIGN+'>AREA REKLAMASI</text><path d="M244 280v30M328 280v30" stroke="#4a3a2a" stroke-width="5"/>'),
+  kota: () => svgWrap(
+    '<defs><linearGradient id="ks" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f1733"/><stop offset="1" stop-color="#3a2a4a"/></linearGradient><radialGradient id="kgl" cx=".5" cy="1" r=".8"><stop offset="0" stop-color="#ffd36b" stop-opacity=".35"/><stop offset="1" stop-color="#ffd36b" stop-opacity="0"/></radialGradient></defs>'+
+    '<rect width="400" height="720" fill="url(#ks)"/>'+stars(21,60,360)+'<circle cx="320" cy="110" r="22" fill="#f4f1ea" opacity=".9"/>'+
+    '<rect width="400" height="720" fill="url(#kgl)"/>'+skyline(42,720,true,"#121a30"))
+};
+
+/* ---------- naskah ---------- */
+const PROLOG = [
+  {w:"nar", t:"Sabtu malam di Banjarmasin. Yandi lagi live TikTok, 1.204 orang menonton."},
+  {w:"raka", t:"Oke guys, habis ini gue spill outfit buat nonton konser minggu depan. Jangan ke mana-mana ya…"},
+  {fx:"glap"},
+  {w:"raka", t:"Yah… mati lampu. Live-nya putus. Baterai tinggal 8%."},
+  {w:"nisa", t:"Yandi? Kamu aman? Seisi kompleks padam nih."},
+  {w:"raka", t:"Kak Kiky! Emang listrik tuh asalnya dari mana sih, kok bisa mati gini?"},
+  {w:"nisa", t:"Tahu nggak, 2 dari 3 lampu di Indonesia menyala dari batubara. Kakak kerja di tambang batubara."},
+  {w:"nisa", t:"Besok ikut Kakak, ya. Kita susuri perjalanan sebuah tambang, dari sebelum digali sampai dihijaukan lagi. Anggap kamu Kepala Tambang Sehari."},
+  {w:"nar", t:"Ada 10 adegan. Di tiap adegan, kamu yang memutuskan. Pilihan yang salah bisa membuat cerita tamat lebih cepat."}
+];
+
+const SCENES = [
+  { loc:"Gerbang Tambang", bg:"gerbang",
+    lines:[
+      {w:"nar", t:"Pagi hari di gerbang area tambang. Dump truck setinggi rumah lewat bergantian."},
+      {w:"raka", t:"Gede banget! Kak, gue foto dulu ya dari pinggir jalan situ."},
+      {w:"nisa", t:"Eits. Sebelum masuk, semua tamu ada aturannya."}
+    ],
+    q:"Apa yang Yandi lakukan?",
+    opts:[
+      {t:"Ikut pengarahan keselamatan, lalu pakai helm, rompi, dan sepatu safety", ok:true},
+      {t:"Selfie dulu di pinggir jalan tambang, sebentar aja", why:"Yandi berdiri dekat roda dump truck. Dari kursinya, operator sama sekali tidak bisa melihat Yandi. Klakson panjang berbunyi, Yandi melompat mundur, dan hari itu juga ia dipulangkan."},
+      {t:"Jalan duluan ke dalam, nanti Kak Kiky nyusul", why:"Yandi berjalan sendirian tanpa APD dan tanpa pendamping, lalu masuk ke jalur dump truck. Petugas keselamatan menghentikannya dan mengantarnya keluar area tambang."}
+    ],
+    badge:{name:"Selamat Dulu", pillar:"Keselamatan kerja", icon:"helmet"},
+    fact:"Dump truck tambang punya titik buta yang luas, jadi operatornya tidak bisa melihat orang di dekat roda. Karena itu setiap tamu wajib ikut pengarahan keselamatan, memakai APD, dan selalu didampingi.",
+    bad:{title:"Titik Buta", should:"Ikuti pengarahan keselamatan dan pakai APD. Di tambang, keselamatan nomor satu."}
+  },
+  { loc:"Ruang Perencanaan", bg:"kantor",
+    lines:[
+      {w:"nar", t:"Kak Kiky membuka peta besar di ruang perencanaan."},
+      {w:"nisa", t:"Tim geologi menemukan lapisan batubara di lahan baru. Kualitasnya bagus."},
+      {w:"udin", t:"Pak Kepala, alat berat sudah siap. Kapan kita mulai gali?"},
+      {w:"raka", t:"Gas langsung aja, Kak?"}
+    ],
+    q:"Sebelum alat berat bergerak, apa yang harus sudah ada?",
+    opts:[
+      {t:"Izin tambang, kajian dampak lingkungan (AMDAL), dan rencana kerja yang disetujui pemerintah", ok:true},
+      {t:"Gali dulu aja, izinnya diurus sambil jalan", why:"Seminggu kemudian petugas datang. Lokasi dipasangi garis segel dan alat berat disita. Menambang tanpa izin adalah tambang ilegal, dan pelakunya bisa dipidana."},
+      {t:"Cukup izin dari pemilik lahan", why:"Pemilik lahan setuju, tapi itu bukan izin tambang. Petugas menyegel lokasi karena perusahaan belum punya izin usaha tambang dan kajian lingkungan."}
+    ],
+    badge:{name:"Taat Izin", pillar:"Perizinan", icon:"doc"},
+    fact:"Sebelum menambang, perusahaan wajib punya izin usaha pertambangan, kajian dampak lingkungan (AMDAL), dan rencana kerja dan anggaran tahunan (RKAB) yang disetujui Kementerian ESDM.",
+    bad:{title:"Disegel", should:"Urus izin, AMDAL, dan rencana kerja dulu. Tambang yang baik dimulai dari dokumen yang lengkap, baru alat berat."}
+  },
+  { loc:"Balai Desa Tambak Rindang", bg:"desa",
+    lines:[
+      {w:"nar", t:"Lahan baru itu berbatasan dengan Desa Tambak Rindang. Warga berkumpul di balai desa."},
+      {w:"ijah", t:"Kami dengar mau ada tambang. Kebun kami bagaimana? Sungai kami bagaimana?"},
+      {w:"raka", t:"(berbisik) Kak, warganya kelihatan khawatir."}
+    ],
+    q:"Apa langkah pertama Yandi?",
+    opts:[
+      {t:"Duduk bersama warga, dengarkan kebutuhan mereka, lalu rencanakan program bersama", ok:true},
+      {t:"Kasih amplop ke tokoh desa biar urusannya cepat", why:"Kabar amplop itu menyebar. Warga merasa dilangkahi dan kepercayaan hilang. Jalan menuju lokasi tambang diblokir."},
+      {t:"Tempel pengumuman di balai desa, beres", why:"Warga cuma membaca selembar kertas tanpa pernah diajak bicara. Kekhawatiran berubah jadi penolakan, dan jalan menuju lokasi tambang diblokir."}
+    ],
+    badge:{name:"Dengar Warga", pillar:"Keterlibatan warga", icon:"people"},
+    fact:"Sebelum programnya berjalan, perusahaan memetakan kondisi dan kebutuhan warga (pemetaan sosial). Hasilnya dipakai untuk menyusun Rencana Induk program masyarakat bersama pemerintah daerah dan warga.",
+    bad:{title:"Jalan Diblokir", should:"Libatkan warga sejak awal. Program yang dirancang bersama warga lebih dipercaya dan lebih tepat sasaran."}
+  },
+  { loc:"Pembukaan Lahan", bg:"lahan",
+    lines:[
+      {w:"nar", t:"Lahan mulai dibuka. Lapisan paling atas berwarna cokelat gelap dan gembur."},
+      {w:"udin", t:"Pak Kepala, tanah lapisan atas ini mau dibuang ke mana?"},
+      {w:"nisa", t:"Itu tanah pucuk, Yan. Kelihatannya biasa, tapi nasib lahan ini nanti bergantung padanya."}
+    ],
+    q:"Tanah pucuk itu diapakan?",
+    opts:[
+      {t:"Dikupas dan disimpan terpisah, nanti dipakai lagi untuk menanam", ok:true},
+      {t:"Campur saja dengan tanah lain biar cepat", why:"Tanah pucuk tercampur batuan. Bertahun-tahun kemudian, bibit yang ditanam di bekas tambang layu satu per satu. Lahannya gersang."},
+      {t:"Jual ke toko tanaman, lumayan buat tambahan", why:"Tanah pucuknya habis terjual. Saat lahan bekas tambang mau dihijaukan, tidak ada lagi tanah subur untuk ditebar. Bibit tidak bisa tumbuh."}
+    ],
+    badge:{name:"Penjaga Tanah", pillar:"Konservasi tanah", icon:"layers"},
+    fact:"Tanah pucuk menyimpan unsur hara, mikroba, dan biji tanaman. Lapisan ini dikupas dan disimpan terpisah, lalu ditebar lagi saat lahan bekas tambang dihijaukan.",
+    bad:{title:"Tanah Mati", should:"Simpan tanah pucuk terpisah. Itu modal untuk menghijaukan lahan lagi."}
+  },
+  { loc:"Kolam Pengendapan", bg:"kolam",
+    lines:[
+      {w:"nar", t:"Semalam hujan deras. Lubang tambang tergenang air cokelat yang keruh."},
+      {w:"nisa", t:"Airnya harus dipompa keluar supaya kerja bisa lanjut. Di hilir ada sungai yang dipakai warga untuk mandi dan mencari ikan."}
+    ],
+    q:"Air dari lubang tambang dialirkan ke mana?",
+    opts:[
+      {t:"Ke kolam pengendapan dulu: lumpurnya diendapkan, keasamannya dinetralkan, kualitasnya diuji, baru dialirkan ke sungai", ok:true},
+      {t:"Langsung ke sungai, kan cuma air hujan", why:"Sungai berubah cokelat pekat. Ikan mati dan warga tidak bisa memakai airnya. Perusahaan dikenai sanksi dan wajib memulihkan sungai."},
+      {t:"Biarkan menggenang di lubang, nanti kering sendiri", why:"Genangan makin tinggi dan pekerjaan berhenti. Saat hujan berikutnya, airnya meluap dan tetap mengalir keruh ke sungai."}
+    ],
+    badge:{name:"Penjaga Sungai", pillar:"Pengelolaan air", icon:"drop"},
+    fact:"Air tambang dialirkan lewat kolam pengendapan. Lumpurnya mengendap, air yang asam dinetralkan dengan kapur, lalu kualitasnya diuji sesuai baku mutu sebelum dilepas ke sungai.",
+    bad:{title:"Sungai Keruh", should:"Olah air tambang di kolam pengendapan dan uji kualitasnya sebelum dilepas ke sungai."}
+  },
+  { loc:"Stockpile & Pelabuhan", bg:"pelabuhan",
+    lines:[
+      {w:"nar", t:"Batubara menumpuk di stockpile. Tongkang sudah menunggu di dermaga."},
+      {w:"pembeli", t:"Harga ekspor lagi bagus. Kami siap ambil semuanya!"},
+      {w:"nisa", t:"Ingat, Yan. Pembangkit listrik di sini juga butuh pasokan, walaupun harganya dipatok lebih murah."}
+    ],
+    q:"Batubaranya dijual ke mana?",
+    opts:[
+      {t:"Penuhi dulu kewajiban pasokan dalam negeri, termasuk untuk pembangkit listrik. Sisanya baru diekspor", ok:true},
+      {t:"Ekspor semua, mumpung harga tinggi", why:"Pembangkit listrik kehabisan pasokan dan berhenti satu per satu. Seisi provinsi gelap seperti malam itu, tapi berhari-hari. Perusahaan juga kena sanksi karena tidak memenuhi kewajiban."},
+      {t:"Tahan dulu di stockpile, tunggu harga naik lagi", why:"Pembangkit kekurangan pasokan dan listrik padam bergiliran. Batubara yang ditumpuk terlalu lama juga bisa memanas dan terbakar sendiri."}
+    ],
+    badge:{name:"Penjaga Lampu", pillar:"Pasokan dalam negeri", icon:"bulb"},
+    fact:"Perusahaan batubara wajib memasok kebutuhan dalam negeri. Untuk pembangkit listrik, harganya dipatok USD 70 per ton sejak 2018, di bawah harga pasar. Tahun 2025, sekitar 32% batubara Indonesia dipakai di dalam negeri.",
+    bad:{title:"Glap Total", should:"Penuhi pasokan dalam negeri dulu. Lampu di rumahmu bergantung pada itu."}
+  },
+  { loc:"Pesan dari Firhan", bg:"hp",
+    lines:[
+      {w:"nar", t:"HP Yandi bergetar. Ada pesan dari Firhan, teman sekelasnya."},
+      {w:"dimas", t:"Yan, katanya lo lagi di tambang? Batubara mah cuma buat PLTU doang kan?"},
+      {w:"nisa", t:"Coba lihat sekelilingmu. Gedung, jalan, sawah… semuanya ada hubungannya."}
+    ],
+    q:"Yandi membalas apa?",
+    opts:[
+      {t:"Nggak cuma listrik. Batubara juga dipakai pabrik semen, pupuk, tekstil, sampai pembuatan baja", ok:true},
+      {t:"Iya, cuma buat listrik doang", why:"Yandi bikin video “batubara cuma buat listrik”. Kolom komentarnya ramai dikoreksi netizen, dan videonya jadi bahan ejekan."},
+      {t:"Buat bahan bakar motor dan mobil juga, kayak bensin", why:"Yandi bikin video “motor jalan pakai batubara”. Langsung dikoreksi ramai-ramai: bensin dan solar dibuat dari minyak bumi, bukan batubara."}
+    ],
+    badge:{name:"Anti Hoaks", pillar:"Manfaat batubara", icon:"factory"},
+    fact:"Januari–Oktober 2025, sekitar dua pertiga batubara yang dipakai di dalam negeri untuk pembangkit listrik. Sisanya untuk pabrik semen, pupuk, tekstil, kertas, dan lainnya. Di dunia, batubara jenis kokas dipakai untuk membuat baja.",
+    bad:{title:"Hoaks Viral", should:"Batubara tidak cuma untuk listrik. Ia juga dipakai membuat semen, pupuk, tekstil, dan baja."}
+  },
+  { loc:"Program Desa", bg:"galeri",
+    lines:[
+      {w:"nar", t:"Tambang sudah berjalan setahun. Ada anggaran program untuk Desa Tambak Rindang."},
+      {w:"ijah", t:"Ibu-ibu di sini pintar menganyam purun, tapi pembelinya sedikit."},
+      {w:"nisa", t:"Program ini bukan sumbangan sukarela, Yan. Perusahaan tambang wajib menjalankannya, dan arahnya mengikuti rencana induk yang disusun bersama warga."}
+    ],
+    q:"Anggarannya dipakai untuk apa?",
+    opts:[
+      {t:"Pelatihan, modal usaha, dan pemasaran anyaman purun, juga beasiswa dan layanan kesehatan sesuai rencana induk", ok:true},
+      {t:"Bagi sembako tiap bulan aja, paling gampang", why:"Selama tambang beroperasi, warga menunggu sembako tiap bulan. Begitu tambang tutup, bantuan berhenti dan ekonomi desa lumpuh. Bantuan darurat tetap penting, tapi tidak membuat desa mandiri."},
+      {t:"Bangun gapura megah bertuliskan nama perusahaan", why:"Gapuranya megah, tapi kehidupan warga tidak berubah. Warga kecewa, dan program dinilai tidak sesuai rencana induk."}
+    ],
+    badge:{name:"Desa Mandiri", pillar:"Pemberdayaan masyarakat (PPM)", icon:"house"},
+    fact:"Program Pengembangan dan Pemberdayaan Masyarakat (PPM) wajib dijalankan perusahaan tambang. Bidangnya meliputi pendidikan, kesehatan, pendapatan riil, ekonomi, sosial budaya, lingkungan, kelembagaan komunitas, dan infrastruktur. Tujuannya warga tetap sejahtera setelah tambang selesai.",
+    bad:{title:"Desa Bergantung", should:"Pakai dana program untuk membuat warga mandiri, sesuai rencana induk yang disusun bersama warga."}
+  },
+  { loc:"Laporan Triwulan", bg:"laporan",
+    lines:[
+      {w:"nar", t:"Akhir triwulan. Laporan ke Kementerian ESDM harus terkirim besok."},
+      {w:"fajar", t:"Pak Kepala, penanaman bulan ini kurang dari target. Ada juga satu kejadian nyaris celaka di jalan tambang."},
+      {w:"raka", t:"Waduh. Kalau dilaporkan, nilai kita kelihatan jelek dong?"}
+    ],
+    q:"Laporannya dibuat bagaimana?",
+    opts:[
+      {t:"Laporkan apa adanya, lengkap dengan penyebab dan rencana perbaikannya", ok:true},
+      {t:"Poles angkanya, toh nggak ada yang ngecek", why:"Inspektur Tambang datang ke lapangan dan angkanya tidak cocok. Kepercayaan hilang, perusahaan dikenai sanksi, dan kegiatan bisa dihentikan sementara."},
+      {t:"Tunda pengirimannya sampai angkanya bagus", why:"Laporan terlambat berarti melanggar kewajiban. Perusahaan mendapat teguran, dan masalah yang ditutupi malah makin besar."}
+    ],
+    badge:{name:"Lapor Jujur", pillar:"Kepatuhan", icon:"check"},
+    fact:"Perusahaan tambang rutin melapor ke Kementerian ESDM, mulai dari produksi, keselamatan, lingkungan, reklamasi, sampai program masyarakat. Inspektur Tambang juga turun langsung memeriksa ke lapangan.",
+    bad:{title:"Ketahuan Inspektur", should:"Laporkan apa adanya, termasuk yang kurang bagus, dan sertakan rencana perbaikannya."}
+  },
+  { loc:"Lahan Bekas Tambang", bg:"reklamasi",
+    lines:[
+      {w:"nar", t:"Satu blok tambang selesai digali. Lubangnya sudah diisi kembali dengan batuan dari blok sebelahnya."},
+      {w:"nisa", t:"Tanah pucuk yang dulu kamu simpan masih ada. Sekarang giliranmu, Kepala Tambang."},
+      {w:"raka", t:"Terus, kapan lahan ini ditanami?"}
+    ],
+    q:"Kapan dan bagaimana lahan ini dipulihkan?",
+    opts:[
+      {t:"Sekarang juga: tata lahannya, tebar tanah pucuk, tanam pohon, lalu rawat dan pantau sampai tumbuh", ok:true},
+      {t:"Nanti saja kalau seluruh tambang sudah tutup", why:"Bertahun-tahun lahan dibiarkan terbuka. Hujan mengikis tanahnya, dan cekungan terisi air jadi kolam berbahaya. Lalai mereklamasi bisa berujung sanksi, bahkan pidana."},
+      {t:"Tanam sekali, foto buat laporan, beres", why:"Bibitnya mati karena tidak dirawat. Saat dinilai, reklamasinya dinyatakan gagal dan harus diulang dari awal."}
+    ],
+    badge:{name:"Penghijau", pillar:"Reklamasi", icon:"sprout"},
+    fact:"Reklamasi wajib dimulai paling lambat 30 hari setelah lahan selesai ditambang, jadi tidak menunggu tambang tutup. Perusahaan juga menempatkan jaminan reklamasi, dan keberhasilan tanamannya dinilai pemerintah.",
+    bad:{title:"Lubang Tambang", should:"Reklamasi sejak dini: tata lahan, tebar tanah pucuk, tanam, lalu rawat sampai berhasil."}
+  }
+];
+
+const ENDING = [
+  {w:"nar", t:"Malamnya, Yandi pulang ke rumah. Lampu sudah menyala lagi."},
+  {w:"raka", t:"Kak, ternyata buat nyalain lampu ini prosesnya panjang banget, ya."},
+  {w:"nisa", t:"Iya. Indonesia sedang menambah listrik dari energi terbarukan, tapi untuk sekarang batubara masih menopang sebagian besar listrik kita."},
+  {w:"nisa", t:"Selama batubara masih ditambang, caranya harus baik: aman, taat aturan, menjaga tanah dan air, menyejahterakan warga, lalu menghijaukan lahan lagi. Itu namanya Good Mining Practice."},
+  {w:"raka", t:"Oke guys, live lanjut! Malam ini gue mau cerita soal tambang."}
+];
+
+/* ---------- alur ---------- */
+const STEPS = [{k:"lines", bg:"kamar", lines:PROLOG}];
+SCENES.forEach((sc, i) => { STEPS.push({k:"chapter", i}); STEPS.push({k:"lines", bg:sc.bg, lines:sc.lines, i}); STEPS.push({k:"choice", i}); });
+STEPS.push({k:"lines", bg:"kota", lines:ENDING});
+STEPS.push({k:"end"});
+
+const st = {name:"", score:0, passed:0, ms:0, step:0, line:0, state:"title", typing:null, full:"", t0:0, timer:null};
+
+let bgKey = "";
+function setBg(k){ if(k && k !== bgKey){ $("bg").innerHTML = BG[k](); bgKey = k; } $("bg").classList.remove("is-bad"); }
+
+function hideAll(){ ["dialog","choice","fact","chapter","portrait","skipBtn","bad","end","board","about","title","glapfx"].forEach(id => $(id).hidden = true); }
+
+function pips(){
+  const cur = SCENES.length ? currentScene() : -1;
+  $("pips").innerHTML = SCENES.map((_, i) => '<span class="pip'+(i < st.passed ? " done" : (i === cur ? " now" : ""))+'"></span>').join("");
+  $("scoreVal").textContent = st.score;
+}
+function currentScene(){ const s = STEPS[st.step]; return s && s.i !== undefined ? s.i : -1; }
+
+function startGame(){
+  const n = $("nameInput").value.trim();
+  if(!n){ $("nameErr").textContent = "Tulis namamu dulu supaya skormu tercatat."; $("nameInput").focus(); return; }
+  st.name = n; save(NAME_KEY, n);
+  restart();
+}
+function restart(){
+  clearInterval(st.clock);
+  Object.assign(st, {score:0, speed:0, passed:0, ms:0, step:0, line:0, runId:uid()});
+  hideAll(); $("hud").hidden = false; bgKey = ""; run();
+}
+
+function run(){
+  const s = STEPS[st.step]; if(!s) return;
+  pips();
+  if(s.k === "lines"){
+    setBg(s.bg); st.line = 0; st.state = "lines";
+    $("dialog").hidden = false; $("skipBtn").hidden = false;
+    showLine();
+  } else if(s.k === "chapter"){
+    const sc = SCENES[s.i]; setBg(sc.bg); st.state = "chapter";
+    $("dialog").hidden = true; $("portrait").hidden = true; $("skipBtn").hidden = true;
+    $("chNum").innerHTML = String(s.i + 1).padStart(2, "0") + "<span> / " + SCENES.length + "</span>";
+    $("chLoc").textContent = sc.loc;
+    $("chapter").hidden = false;
+    clearTimeout(st.timer); st.timer = setTimeout(() => { if(st.state === "chapter") next(); }, 2200);
+  } else if(s.k === "choice"){
+    showChoice(s.i);
+  } else if(s.k === "end"){
+    finish();
+  }
+}
+function next(){ clearTimeout(st.timer); $("chapter").hidden = true; st.step++; run(); }
+
+function showLine(){
+  const L = STEPS[st.step].lines[st.line];
+  if(L.fx === "glap"){
+    st.state = "fx"; $("dialog").hidden = true; $("portrait").hidden = true;
+    const g = $("glapfx"); g.hidden = false; g.classList.remove("run"); void g.offsetWidth; g.classList.add("run");
+    setTimeout(() => { setBg("glap"); }, 600);
+    setTimeout(() => { g.hidden = true; g.classList.remove("run"); st.state = "lines"; $("dialog").hidden = false; st.line++; showLine(); }, reduced ? 900 : 1900);
+    return;
+  }
+  const c = CH[L.w === "raka" && currentScene() > 0 ? "rakaApd" : L.w];
+  const box = $("box"), who = $("who");
+  if(L.w === "nar" || !c){ box.classList.add("nar"); who.hidden = true; $("portrait").hidden = true; }
+  else {
+    box.classList.remove("nar"); who.hidden = false; who.textContent = c.name; who.dataset.c = L.w;
+    const p = $("portrait"); if(p.dataset.k !== L.w + currentScene()){ p.innerHTML = c.av; p.dataset.k = L.w + currentScene(); p.hidden = true; void p.offsetWidth; } p.hidden = false;
+  }
+  type(L.t);
+}
+function type(txt){
+  clearInterval(st.typing); st.full = txt; $("hint").classList.remove("on");
+  const el = $("text");
+  if(reduced){ el.textContent = txt; $("hint").classList.add("on"); st.typing = null; return; }
+  let i = 0; el.textContent = "";
+  st.typing = setInterval(() => { i += 2; el.textContent = txt.slice(0, i); if(i >= txt.length){ clearInterval(st.typing); st.typing = null; $("hint").classList.add("on"); } }, 28);
+}
+function advance(){
+  if(st.state !== "lines") return;
+  if(st.typing){ clearInterval(st.typing); st.typing = null; $("text").textContent = st.full; $("hint").classList.add("on"); return; }
+  st.line++;
+  if(st.line >= STEPS[st.step].lines.length){ $("dialog").hidden = true; $("skipBtn").hidden = true; next(); }
+  else showLine();
+}
+function skip(){
+  if(st.state !== "lines") return;
+  clearInterval(st.typing); st.typing = null;
+  const lines = STEPS[st.step].lines;
+  if(lines.some(l => l.fx === "glap")) setBg("glap");
+  $("dialog").hidden = true; $("skipBtn").hidden = true; next();
+}
+
+function shuffle(a){ a = a.slice(); for(let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function showChoice(i){
+  const sc = SCENES[i]; st.state = "choice";
+  $("dialog").hidden = true; $("skipBtn").hidden = true;
+  $("qEyebrow").textContent = "Keputusan " + (i + 1) + " dari " + SCENES.length;
+  $("q").textContent = sc.q;
+  const letters = ["A","B","C","D"];
+  $("opts").innerHTML = "";
+  shuffle(sc.opts).forEach((o, k) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "opt"; b.dataset.ok = o.ok ? "1" : "0";
+    b.innerHTML = "<b>" + letters[k] + "</b><span></span>"; b.querySelector("span").textContent = o.t;
+    b.addEventListener("click", ev => { ev.stopPropagation(); pick(i, o); });
+    $("opts").appendChild(b);
+  });
+  $("choice").hidden = false; st.t0 = performance.now();
+  clearInterval(st.clock); tick(); st.clock = setInterval(tick, 100);
+}
+/* Bonus cepat: +50 kalau menjawab dalam 3 detik, turun bertahap sampai 0 di detik ke-20 */
+const BONUS_MAX = 50, FAST = 3, SLOW = 20;
+function speedBonus(ms){ const s = ms / 1000; if(s <= FAST) return BONUS_MAX; if(s >= SLOW) return 0; return Math.round(BONUS_MAX * (SLOW - s) / (SLOW - FAST)); }
+function tick(){
+  const ms = performance.now() - st.t0, s = ms / 1000;
+  $("bonusNow").textContent = "+" + speedBonus(ms);
+  const left = s <= FAST ? 1 : Math.max(0, (SLOW - s) / (SLOW - FAST));
+  $("timeFill").style.transform = "scaleX(" + left.toFixed(3) + ")";
+  if(s >= SLOW) clearInterval(st.clock);
+}
+function pick(i, o){
+  if(st.state !== "choice") return;
+  clearInterval(st.clock);
+  const took = performance.now() - st.t0;
+  st.ms += took;
+  $("choice").hidden = true;
+  if(o.ok){
+    const bonus = speedBonus(took);
+    st.score += 100 + bonus; st.speed += bonus; st.passed++; pips();
+    const sc = SCENES[i]; st.state = "fact";
+    $("factPlus").textContent = "+100 poin · bonus cepat +" + bonus + " (" + secs(took) + ")";
+    $("factMedal").innerHTML = icon(sc.badge.icon); $("factName").textContent = sc.badge.name; $("factText").textContent = sc.fact;
+    $("fact").hidden = false; $("factNext").focus({preventScroll:true});
+  } else badEnding(i, o);
+}
+
+function secs(ms){ return (ms / 1000).toFixed(1).replace(".", ",") + " dtk"; }
+function badEnding(i, o){
+  st.state = "bad"; const sc = SCENES[i];
+  $("portrait").hidden = true; $("hud").hidden = true; $("bg").classList.add("is-bad");
+  const el = $("bad");
+  el.innerHTML =
+    '<span class="tag">Bad ending · Adegan ' + String(i + 1).padStart(2, "0") + ' / ' + SCENES.length + '</span>' +
+    '<h2 class="big-title"></h2><p class="story"></p>' +
+    '<div class="should"><strong>Seharusnya</strong><p></p></div>' +
+    '<div class="stats"><div class="stat"><span>Skor</span><b>' + st.score + '</b></div><div class="stat"><span>Adegan lolos</span><b>' + st.passed + '/' + SCENES.length + '</b></div></div>' +
+    '<p class="sync"></p>' +
+    '<div class="btn-row"><button class="btn" type="button" data-act="again">Main lagi</button><button class="btn alt" type="button" data-act="board">Papan skor</button></div>';
+  el.querySelector(".big-title").textContent = sc.bad.title;
+  el.querySelector(".story").textContent = o.why;
+  el.querySelector(".should p").textContent = sc.bad.should;
+  el.hidden = false; el.scrollTop = 0;
+  record(false); syncUI();
+}
+
+function finish(){
+  st.state = "end"; st.score += 200; pips();
+  $("portrait").hidden = true; $("hud").hidden = true;
+  const el = $("end");
+  el.innerHTML =
+    '<span class="tag good">Good ending · Tamat</span>' +
+    '<h2 class="big-title" style="color:var(--lamp)">Tambang yang Baik</h2>' +
+    '<p class="sync"></p>' +
+    '<div class="card">' +
+      '<div class="card-head"><div><div class="eyebrow">Kartu Good Mining Practice</div><div class="who-name"></div></div><div class="pts">' + st.score + '<small>POIN</small></div></div>' +
+      '<p class="card-sub">' + SCENES.length + '/' + SCENES.length + ' adegan · bonus cepat +' + st.speed + ' · bonus tamat +200 · total waktu menjawab ' + secs(st.ms) + '</p>' +
+      '<div class="grid">' + SCENES.map(s => '<div class="gb"><div class="medal">' + icon(s.badge.icon) + '</div><div><b>' + s.badge.name + '</b><span>' + s.badge.pillar + '</span></div></div>').join("") + '</div>' +
+      '<p class="gmp"><strong>Good Mining Practice</strong> berarti menambang dengan aman, taat aturan, menjaga tanah dan air, menyejahterakan warga, lalu menghijaukan lahan lagi.</p>' +
+    '</div>' +
+    '<p class="note">Tunjukkan kartu ini ke petugas stan untuk verifikasi hadiah.</p>' +
+    '<div class="btn-row"><button class="btn" type="button" data-act="board">Lihat papan skor</button><button class="btn alt" type="button" data-act="again">Main lagi</button></div>';
+  el.querySelector(".who-name").textContent = st.name;
+  el.hidden = false; el.scrollTop = 0;
+  record(true); syncUI();
+}
+
+/* ---------- papan skor online (Google Apps Script) + cadangan di HP ---------- */
+const API = (typeof window.GLAP_API === "string" && /^https?:\/\/[^ ]+$/.test(window.GLAP_API.trim())) ? window.GLAP_API.trim() : "";
+const SESI = String(window.GLAP_SESI || "umum").slice(0, 40);
+const QKEY = "glap-antrean", DEV_KEY = "glap-perangkat";
+function uid(){ try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return Date.now().toString(36) + Math.random().toString(36).slice(2, 12); }
+let DEVICE = load(DEV_KEY, ""); if(!DEVICE){ DEVICE = uid(); save(DEV_KEY, DEVICE); }
+let queue = load(QKEY, []); if(!Array.isArray(queue)) queue = [];
+let flushing = false, syncState = "idle";
+
+function better(a, b){ return a.score !== b.score ? a.score > b.score : a.ms < b.ms; }
+function record(done){
+  const entry = {name:st.name, score:st.score, passed:st.passed, ms:Math.round(st.ms), done:done, at:Date.now()};
+  const list = load(BOARD_KEY, []);
+  const k = list.findIndex(e => e.name.toLowerCase() === st.name.toLowerCase());
+  if(k < 0) list.push(entry); else if(better(entry, list[k])) list[k] = entry;
+  list.sort((a, b) => b.score - a.score || a.ms - b.ms);
+  save(BOARD_KEY, list.slice(0, 50));
+  if(API){
+    queue.push({runId:st.runId, sesi:SESI, device:DEVICE, name:st.name, score:st.score, passed:st.passed, ms:Math.round(st.ms), done:done});
+    save(QKEY, queue); syncState = "sending"; flush();
+  }
+}
+async function flush(){
+  if(!API || flushing || !queue.length){ syncUI(); return; }
+  flushing = true;
+  try{
+    while(queue.length){
+      let res = null;
+      try{ const r = await fetch(API, {method:"POST", body:JSON.stringify(queue[0])}); res = await r.json(); }
+      catch(e){ syncState = "waiting"; break; }
+      if(res && (res.ok || res.error === "tidak_wajar" || res.error === "data")){
+        queue.shift(); save(QKEY, queue); syncState = res.ok ? "sent" : "rejected";
+      } else { syncState = "waiting"; break; }
+    }
+  } finally { flushing = false; syncUI(); }
+}
+function syncUI(){
+  const el = document.querySelector(".screen:not([hidden]) .sync"); if(!el) return;
+  el.className = "sync";
+  if(!API){ el.textContent = "Mode offline: skor hanya tersimpan di HP ini."; return; }
+  if(queue.length && syncState !== "sending"){ el.textContent = "Skor belum terkirim. Akan dikirim otomatis begitu ada sinyal."; el.classList.add("warn"); return; }
+  if(queue.length){ el.textContent = "Mengirim skor ke papan skor…"; return; }
+  if(syncState === "rejected"){ el.textContent = "Skor ini tidak bisa dicatat di papan skor."; el.classList.add("warn"); return; }
+  if(syncState === "sent"){ el.textContent = "Skor sudah masuk papan skor ✓"; el.classList.add("ok"); return; }
+  el.textContent = "";
+}
+window.addEventListener("online", flush);
+setInterval(flush, 15000);
+setTimeout(flush, 1500);
+
+let armed = false;
+async function showBoard(){
+  hideAll(); $("hud").hidden = true; st.state = "board"; armed = false;
+  const el = $("board");
+  el.innerHTML =
+    '<h2 class="h2">Papan Skor</h2>' +
+    '<p class="note">Tiap jawaban benar +100 poin, ditambah bonus cepat sampai +50. Tamat +200. Kalau poinnya sama, yang total waktu menjawabnya lebih cepat menang.</p>' +
+    '<p class="note" id="boardSrc"></p>' +
+    '<div id="boardBody"><p class="empty">Memuat papan skor…</p></div>' +
+    '<div class="btn-row"><button class="btn" type="button" data-act="' + (st.name ? "again" : "home") + '">' + (st.name ? "Main lagi" : "Mulai main") + '</button><button class="btn alt" type="button" data-act="home">Ke halaman awal</button></div>' +
+    (API ? '' : '<button class="link" type="button" data-act="reset">Kosongkan papan skor di HP ini</button>');
+  el.hidden = false; el.scrollTop = 0;
+  let list = null;
+  if(API){
+    try{ const r = await fetch(API + "?action=board&sesi=" + encodeURIComponent(SESI)); const j = await r.json(); if(j && j.ok) list = j.list; }catch(e){}
+  }
+  if(st.state !== "board") return;
+  const online = !!list;
+  if(!online) list = load(BOARD_KEY, []);
+  $("boardSrc").textContent = online ? "Papan skor bersama semua pemain." : (API ? "Papan skor bersama belum bisa dimuat (cek sinyal). Yang tampil skor di HP ini saja." : "Skor yang tersimpan di HP ini.");
+  const body = $("boardBody");
+  if(!list.length){ body.innerHTML = '<p class="empty">Belum ada skor. Jadilah yang pertama.</p>'; return; }
+  const ol = document.createElement("ol"); ol.className = "board-list";
+  const myKey = DEVICE + "|" + (st.name || "").toLowerCase();
+  list.slice(0, 25).forEach((e, i) => {
+    const li = document.createElement("li");
+    li.className = i === 0 ? "t1" : i === 1 ? "t2" : i === 2 ? "t3" : i < 5 ? "t4" : "";
+    const mine = online ? e.key === myKey : (st.name && e.name.toLowerCase() === st.name.toLowerCase());
+    if(mine) li.classList.add("me");
+    li.innerHTML = '<span class="rk">' + (i + 1) + '</span><div style="min-width:0"><div class="nm"></div><div class="meta">' + (e.done ? "Tamat" : e.passed + "/" + SCENES.length + " adegan") + ' · ' + secs(e.ms) + (e.at ? ' · ' + new Date(e.at).toLocaleString("id-ID", {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"}).replace(",", "") : '') + '</div></div><span class="sc">' + e.score + '</span>';
+    li.querySelector(".nm").textContent = e.name; ol.appendChild(li);
+  });
+  body.innerHTML = ""; body.appendChild(ol);
+}
+function home(){ hideAll(); $("hud").hidden = true; st.state = "title"; bgKey = ""; $("bg").innerHTML = ""; $("title").hidden = false; }
+
+/* ---------- input ---------- */
+$("startBtn").addEventListener("click", ev => { ev.stopPropagation(); startGame(); });
+$("nameInput").addEventListener("keydown", ev => { if(ev.key === "Enter"){ ev.preventDefault(); startGame(); } });
+$("nameInput").addEventListener("input", () => { $("nameErr").textContent = ""; });
+$("boardLink").addEventListener("click", ev => { ev.stopPropagation(); showBoard(); });
+$("aboutLink").addEventListener("click", ev => { ev.stopPropagation(); hideAll(); $("about").hidden = false; st.state = "about"; });
+$("aboutBack").addEventListener("click", ev => { ev.stopPropagation(); home(); });
+$("skipBtn").addEventListener("click", ev => { ev.stopPropagation(); skip(); });
+$("factNext").addEventListener("click", ev => { ev.stopPropagation(); $("fact").hidden = true; next(); });
+document.addEventListener("click", ev => {
+  const b = ev.target.closest("[data-act]");
+  if(b){
+    ev.stopPropagation();
+    const a = b.dataset.act;
+    if(a === "again") restart();
+    else if(a === "board") showBoard();
+    else if(a === "home") home();
+    else if(a === "reset"){
+      if(!armed){ armed = true; b.textContent = "Yakin? Ketuk sekali lagi untuk mengosongkan"; return; }
+      save(BOARD_KEY, []); showBoard();
+    }
+    return;
+  }
+  if(st.state === "lines") advance();
+  else if(st.state === "chapter") next();
+});
+document.addEventListener("keydown", ev => {
+  if(ev.target.tagName === "INPUT" || ev.target.tagName === "BUTTON") return;
+  if(ev.key === " " || ev.key === "Enter"){ ev.preventDefault(); if(st.state === "lines") advance(); else if(st.state === "chapter") next(); }
+});
+
+const saved = load(NAME_KEY, ""); if(saved) $("nameInput").value = saved;
+})();
+</script>
+
+</body>
+</html>
